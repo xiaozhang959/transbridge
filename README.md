@@ -2,6 +2,7 @@
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Deploy with Vercel](https://vercel.com/button)][vercel-deploy]
+[![Powered by DartNode](https://dartnode.com/branding/DN-Open-Source-sm.png)](https://dartnode.com "Powered by DartNode - Free VPS for Open Source")
 
 TransBridge 是一个基于 Go 的翻译 API 代理服务。它通过调用大模型
 API 提供统一的翻译能力，并兼容部分 DeepL / OpenAI 风格接口，
