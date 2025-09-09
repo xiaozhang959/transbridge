@@ -4,10 +4,11 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
+	"strings"
+
 	iso639 "github.com/emvi/iso-639-1"
 	"golang.org/x/text/language"
 	"golang.org/x/text/language/display"
-	"strings"
 )
 
 // GenerateCacheKey 生成缓存键
@@ -24,7 +25,7 @@ func GenerateCacheKey(text, sourceLang, targetLang string) string {
 	hasher.Write([]byte(key))
 	md5string := hex.EncodeToString(hasher.Sum(nil))
 
-	return "transbrige:" + md5string
+	return "transbridge:" + md5string
 }
 
 // IsValidLanguageCode 检查语言代码是否有效
@@ -72,7 +73,7 @@ func ExtractLanguageCode(code string) string {
 //
 // If the template does not contain {{input}} or {{text}}, it is considered invalid,
 // and a default fallback template will be used instead.
-func ApplyPromptTemplate(template, input, sourceLang, targetLang string) string {
+func ApplyPromptTemplate(template, input, sourceLang, targetLang string) (string, error) {
 	// Validate the template: must contain {{input}} or {{text}} to be meaningful
 	if !strings.Contains(template, "{{input}}") && !strings.Contains(template, "{{text}}") {
 		template = "Translate the following text from {{source_lang}} to {{target_lang}}:\n\n{{input}}"
@@ -85,7 +86,7 @@ func ApplyPromptTemplate(template, input, sourceLang, targetLang string) string 
 		"{{target_lang}}", targetLang,
 	)
 
-	return replacer.Replace(template)
+	return replacer.Replace(template), nil
 }
 
 func GetLanguageName(langCode string) (string, error) {

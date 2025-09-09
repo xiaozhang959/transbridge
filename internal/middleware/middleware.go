@@ -3,7 +3,9 @@ package middleware
 
 import (
 	"log"
+	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
@@ -53,7 +55,7 @@ func Logger(next http.HandlerFunc) http.HandlerFunc {
 // CORS 处理跨域请求的中间件
 func CORS(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// 设置CORS头
+		// 设置CORS头（可根据需要限制域名）
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
@@ -101,7 +103,7 @@ func RateLimiter(requestsPerMinute int) MiddlewareFunc {
 
 	return func(next http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
-			clientIP := r.RemoteAddr
+			clientIP := realIP(r)
 
 			mu.Lock()
 			times := bucket[clientIP]
@@ -127,6 +129,29 @@ func RateLimiter(requestsPerMinute int) MiddlewareFunc {
 			next.ServeHTTP(w, r)
 		}
 	}
+}
+
+// realIP 尝试从代理头中解析真实客户端 IP
+func realIP(r *http.Request) string {
+	// 优先 X-Forwarded-For（取第一个）
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		parts := strings.Split(xff, ",")
+		ip := strings.TrimSpace(parts[0])
+		if parsed := net.ParseIP(ip); parsed != nil {
+			return ip
+		}
+	}
+	if xrip := r.Header.Get("X-Real-IP"); xrip != "" {
+		if parsed := net.ParseIP(xrip); parsed != nil {
+			return xrip
+		}
+	}
+	// 回退到 RemoteAddr（去掉端口）
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err == nil {
+		return host
+	}
+	return r.RemoteAddr
 }
 
 // Recovery 是一个恢复panic的中间件

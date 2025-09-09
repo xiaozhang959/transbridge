@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/rand"
 	"sync"
+	"time"
 
 	"transbridge/config"
 )
@@ -27,6 +28,7 @@ type ModelManager struct {
 	modelWeights map[ModelIdentifier]int
 	defaultModel ModelIdentifier
 	mu           sync.RWMutex
+	rng          *rand.Rand
 }
 
 func NewModelManager(providers []config.ProviderConfig) (*ModelManager, error) {
@@ -38,6 +40,9 @@ func NewModelManager(providers []config.ProviderConfig) (*ModelManager, error) {
 		translators:  make(map[ModelIdentifier]Translator),
 		modelWeights: make(map[ModelIdentifier]int),
 	}
+
+	// 使用独立的随机源，避免未播种导致的可预测选择
+	mm.rng = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	var defaultFound bool
 	for _, provider := range providers {
@@ -69,6 +74,7 @@ func NewModelManager(providers []config.ProviderConfig) (*ModelManager, error) {
 					timeout,
 					modelCfg.MaxTokens,
 					modelCfg.Temperature,
+					modelCfg.TopP,
 				)
 			case "ollama":
 				translator = NewOllamaTranslator(
@@ -107,9 +113,11 @@ func (mm *ModelManager) GetModel(provider, model string) (Translator, error) {
 	mm.mu.RLock()
 	defer mm.mu.RUnlock()
 
-	identifier := ModelIdentifier{Provider: provider, Model: model}
-	if translator, exists := mm.translators[identifier]; exists {
-		return translator, nil
+	// 由于存储键包含 APIURL，这里以 provider+model 进行匹配查找
+	for id, translator := range mm.translators {
+		if id.Provider == provider && id.Model == model {
+			return translator, nil
+		}
 	}
 	return nil, fmt.Errorf("model %s not found for provider %s", model, provider)
 }
@@ -130,7 +138,11 @@ func (mm *ModelManager) GetRandomModel() Translator {
 		totalWeight += weight
 	}
 
-	r := rand.Intn(totalWeight)
+	if totalWeight <= 0 {
+		return mm.translators[mm.defaultModel]
+	}
+
+	r := mm.rng.Intn(totalWeight)
 	for identifier, weight := range mm.modelWeights {
 		r -= weight
 		if r <= 0 {

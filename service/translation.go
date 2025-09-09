@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 	"transbridge/cache"
 	"transbridge/internal/utils"
@@ -50,21 +51,30 @@ func (s *TranslationService) Translate(ctx context.Context, provider, model, pro
 
 	startTime := time.Now()
 
-	// 2. 尝试从缓存获取
+	// 2. 尝试从缓存获取（并兼容旧前缀 transbrige:）
 	if s.cache != nil {
 		cacheKey = utils.GenerateCacheKey(text, sourceLang, targetLang)
 		if cachedData, err := s.cache.Get(ctx, cacheKey); err == nil && cachedData != "" {
-			// 解析缓存数据
 			var entry cache.CacheEntry
 			if err := json.Unmarshal([]byte(cachedData), &entry); err == nil {
 				log.Printf("Cache hit for: %s, originally translated by %s/%s",
 					cacheKey, entry.APIURL, entry.Model)
-
-				// 对于缓存命中，我们可能不知道原始的提供商和模型
-				// 记录翻译
 				s.logTranslation(text, entry.Translation, sourceLang, targetLang, entry.APIURL, entry.Provider, entry.Model, cacheKey, true, time.Since(startTime).Milliseconds())
-
 				return entry.Translation, nil
+			}
+		} else {
+			// 向后兼容旧键前缀
+			fallbackKey := strings.Replace(cacheKey, "transbridge:", "transbrige:", 1)
+			if fallbackKey != cacheKey {
+				if cachedData2, err2 := s.cache.Get(ctx, fallbackKey); err2 == nil && cachedData2 != "" {
+					var entry2 cache.CacheEntry
+					if err := json.Unmarshal([]byte(cachedData2), &entry2); err == nil {
+						log.Printf("Cache hit (legacy key) for: %s, originally translated by %s/%s",
+							fallbackKey, entry2.APIURL, entry2.Model)
+						s.logTranslation(text, entry2.Translation, sourceLang, targetLang, entry2.APIURL, entry2.Provider, entry2.Model, fallbackKey, true, time.Since(startTime).Milliseconds())
+						return entry2.Translation, nil
+					}
+				}
 			}
 		}
 	}
@@ -103,7 +113,8 @@ func (s *TranslationService) Translate(ctx context.Context, provider, model, pro
 		cacheData, err := json.Marshal(cacheEntry)
 		if err == nil {
 			cacheKey = utils.GenerateCacheKey(text, sourceLang, targetLang)
-			if err := s.cache.Set(ctx, cacheKey, string(cacheData), 24*time.Hour); err != nil {
+			// 让底层缓存实现使用其默认 TTL（传 0）或永久（由实现决定）
+			if err := s.cache.Set(ctx, cacheKey, string(cacheData), 0); err != nil {
 				log.Printf("Failed to cache translation: %v", err)
 			}
 		}

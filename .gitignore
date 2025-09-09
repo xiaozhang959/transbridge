@@ -2,6 +2,9 @@
 .DS_Store
 Thumbs.db
 
+config.yml
+config_maas.yml
+config_maas_fuzhuang.yml
 # 项目可执行文件
 transbridge
 transbridge.exe
@@ -11,6 +14,9 @@ transbridge.exe
 *.so
 *.obj
 *.o
+
+.specstory/
+.cursorindexingignore
 
 # 编译生成的临时文件
 *.test

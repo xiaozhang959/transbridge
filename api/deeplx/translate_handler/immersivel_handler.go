@@ -2,7 +2,6 @@ package translate_handler
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 	"strings"
 	"sync"
@@ -18,6 +17,7 @@ type BatchTranslateItem struct {
 	Index              int    `json:"index"`
 	DetectedSourceLang string `json:"detected_source_lang"`
 	Text               string `json:"text"`
+	Error              string `json:"error,omitempty"`
 }
 
 type BatchTranslateResponse struct {
@@ -64,7 +64,10 @@ func (h *Handler) HandleImmersiveLTranslation(w http.ResponseWriter, r *http.Req
 		item  *BatchTranslateItem
 	}
 
-	maxConcurrent := 5
+	maxConcurrent := h.maxConcurrent
+	if maxConcurrent <= 0 {
+		maxConcurrent = 5
+	}
 	sem := make(chan struct{}, maxConcurrent)
 	resultChan := make(chan result, len(req.TextList))
 	results := make([]*BatchTranslateItem, len(req.TextList))
@@ -79,8 +82,15 @@ func (h *Handler) HandleImmersiveLTranslation(w http.ResponseWriter, r *http.Req
 
 			translated, err := h.translationService.Translate(r.Context(), "", "", h.promptTemplate, t, req.SourceLang, req.TargetLang)
 			if err != nil {
-				log.Printf("Translation failed for index %d: %v", idx, err)
-				resultChan <- result{index: idx, item: nil}
+				resultChan <- result{
+					index: idx,
+					item: &BatchTranslateItem{
+						Index:              idx,
+						DetectedSourceLang: req.SourceLang,
+						Text:               "",
+						Error:              err.Error(),
+					},
+				}
 				return
 			}
 

@@ -10,10 +10,12 @@ providers:
     models:
       - name: "${PROVIDER_1_MODEL_1_NAME}"
         weight: ${PROVIDER_1_MODEL_1_WEIGHT}
+        top_p: ${PROVIDER_1_MODEL_1_TOP_P}
         max_tokens: ${PROVIDER_1_MODEL_1_MAX_TOKENS}
         temperature: ${PROVIDER_1_MODEL_1_TEMPERATURE}
       - name: "${PROVIDER_1_MODEL_2_NAME}"
         weight: ${PROVIDER_1_MODEL_2_WEIGHT}
+        top_p: ${PROVIDER_1_MODEL_2_TOP_P}
         max_tokens: ${PROVIDER_1_MODEL_2_MAX_TOKENS}
         temperature: ${PROVIDER_1_MODEL_2_TEMPERATURE}
 

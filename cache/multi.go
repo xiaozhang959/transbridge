@@ -34,7 +34,8 @@ func (m *MultiCache) Get(ctx context.Context, key string) (string, error) {
 		if err == nil {
 			// 找到数据后，更新之前的缓存层
 			for j := 0; j < i; j++ {
-				m.caches[j].Set(ctx, key, value, time.Hour*24)
+				// 让上层缓存使用其默认 TTL（传 0），避免硬编码 24h
+				_ = m.caches[j].Set(ctx, key, value, 0)
 			}
 			return value, nil
 		}

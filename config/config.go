@@ -45,6 +45,7 @@ type ProviderConfig struct {
 type ModelConfig struct {
 	Name        string  `yaml:"name"`
 	Weight      int     `yaml:"weight"`
+	TopP        float32 `yaml:"top_p"`
 	MaxTokens   int     `yaml:"max_tokens"`
 	Temperature float32 `yaml:"temperature"`
 	Timeout     *int    `yaml:"timeout,omitempty"`

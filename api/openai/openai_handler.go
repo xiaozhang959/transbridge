@@ -7,8 +7,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/sashabaranov/go-openai"
 	"transbridge/translator"
+
+	"github.com/sashabaranov/go-openai"
 )
 
 type OpenAIHandler struct {
@@ -91,6 +92,14 @@ func (h *OpenAIHandler) HandleChatCompletion(w http.ResponseWriter, r *http.Requ
 }
 
 func (h *OpenAIHandler) HandleListModels(w http.ResponseWriter, r *http.Request) {
+	// 验证 API 密钥以保持与其它端点一致
+	authHeader := r.Header.Get("Authorization")
+	token := strings.TrimPrefix(authHeader, "Bearer ")
+	if !h.authTokens[token] {
+		h.sendError(w, "Unauthorized", "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	// 获取所有可用模型
 	models := h.modelManager.ListModels()
 

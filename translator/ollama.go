@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"time"
 	"transbridge/internal/utils"
@@ -16,6 +17,7 @@ type OllamaTranslator struct {
 	model      string
 	timeout    time.Duration
 	httpClient *http.Client
+	retryTimes int
 }
 
 // OllamaRequest 定义 Ollama API 请求结构
@@ -46,6 +48,7 @@ func NewOllamaTranslator(apiURL, model string, timeout int) *OllamaTranslator {
 		model:      model,
 		timeout:    time.Duration(timeout) * time.Second,
 		httpClient: &http.Client{Timeout: time.Duration(timeout) * time.Second},
+		retryTimes: 2,
 	}
 }
 
@@ -54,7 +57,11 @@ func (t *OllamaTranslator) Translate(promptTemplate, text, sourceLang, targetLan
 	slang, _ := utils.GetLanguageName(sourceLang)
 	tlang, _ := utils.GetLanguageName(targetLang)
 
-	prompt := utils.ApplyPromptTemplate(promptTemplate, text, slang, tlang)
+	prompt, err := utils.ApplyPromptTemplate(promptTemplate, text, slang, tlang)
+	if err != nil {
+		log.Println(err)
+		return "", err
+	}
 
 	reqBody := OllamaRequest{
 		Model: t.model,
@@ -67,19 +74,32 @@ func (t *OllamaTranslator) Translate(promptTemplate, text, sourceLang, targetLan
 		Stream: false,
 	}
 
-	jsonData, err := json.Marshal(reqBody)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal request: %w", err)
+	jsonData, errVar := json.Marshal(reqBody)
+	if errVar != nil {
+		return "", fmt.Errorf("failed to marshal request: %w", errVar)
 	}
 
-	req, err := http.NewRequest("POST", t.apiURL, bytes.NewBuffer(jsonData))
-	if err != nil {
-		return "", fmt.Errorf("failed to create request: %w", err)
+	req, errVar := http.NewRequest("POST", t.apiURL, bytes.NewBuffer(jsonData))
+	if errVar != nil {
+		return "", fmt.Errorf("failed to create request: %w", errVar)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := t.httpClient.Do(req)
+	var resp *http.Response
+	//var err error
+	for attempt := 0; attempt <= t.retryTimes; attempt++ {
+		resp, err = t.httpClient.Do(req)
+		if err == nil && resp != nil && resp.StatusCode == http.StatusOK {
+			break
+		}
+		if resp != nil {
+			io.Copy(io.Discard, resp.Body)
+			resp.Body.Close()
+		}
+		backoff := time.Duration(200*(1<<attempt)) * time.Millisecond
+		time.Sleep(backoff)
+	}
 	if err != nil {
 		return "", fmt.Errorf("failed to send request: %w", err)
 	}
