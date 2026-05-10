@@ -1,63 +1,54 @@
-# config.example.yml
 server:
-  port: 8080
+  port: ${SERVER_PORT}
 
 providers:
-  - provider: "openai"
-    api_url: "https://api.openai.com/v1/chat/completions"
-    api_key: "your-api-key-1"
-    timeout: 30
-    is_default: true
+  - provider: "${PROVIDER_1_TYPE}"
+    api_url: "${PROVIDER_1_API_URL}"
+    api_key: "${PROVIDER_1_API_KEY}"
+    timeout: ${PROVIDER_1_TIMEOUT}
+    is_default: ${PROVIDER_1_IS_DEFAULT}
     models:
-      - name: "gpt-3.5-turbo"
-        weight: 10
-        max_tokens: 2000
-        temperature: 0.3
-
-  - provider: "ollama"
-    api_url: "http://localhost:11434/api/chat"
-    timeout: 30
-    is_default: false
-    models:
-      - name: "llama2"
-        weight: 5
-        max_tokens: 2000
-        temperature: 0.3
-      - name: "mistral"
-        weight: 5
-        max_tokens: 2000
-        temperature: 0.3
+      - name: "${PROVIDER_1_MODEL_1_NAME}"
+        weight: ${PROVIDER_1_MODEL_1_WEIGHT}
+        max_tokens: ${PROVIDER_1_MODEL_1_MAX_TOKENS}
+        temperature: ${PROVIDER_1_MODEL_1_TEMPERATURE}
+      - name: "${PROVIDER_1_MODEL_2_NAME}"
+        weight: ${PROVIDER_1_MODEL_2_WEIGHT}
+        max_tokens: ${PROVIDER_1_MODEL_2_MAX_TOKENS}
+        temperature: ${PROVIDER_1_MODEL_2_TEMPERATURE}
 
 cache:
-  enabled: true
-  types: ["memory", "redis"]
-
-  # 内存缓存特定配置
+  enabled: ${CACHE_ENABLED}
+  types: ${CACHE_TYPES}
   memory:
     ttl:
-      value: "permanent"          # 1小时 (支持: 30s, 5m, 2h, 1d, 1w, permanent)
-    max_size: 100000000        # 最多存储1亿条记录
-
-  # Redis缓存特定配置
+      value: "${CACHE_MEMORY_TTL}"
+    max_size: ${CACHE_MEMORY_MAX_SIZE}
   redis:
-    host: "localhost"
-    port: 6379
-    password: ""
-    db: 0
+    host: "${REDIS_HOST}"
+    port: ${REDIS_CACHE_PORT}
+    password: "${REDIS_PASSWORD}"
+    db: ${REDIS_DB}
     ttl:
-      value: "permanent"          # 7天 (也可以使用: permanent 表示永久存储)
+      value: "${REDIS_TTL}"
 
 prompt:
-  template: "Translate the following {{source_lang}} content to {{target_lang}}: {{input}}"
+  template: >-
+    ${PROMPT_TEMPLATE}
 
 transapi:
-  tokens:
-    - "tr-98584e33-f387-42cc-a467-f02513bd400d"
+  tokens: ${TRANSAPI_TOKENS}
+
+openai:
+  compatible_api:
+    enabled: ${OPENAI_COMPATIBLE_ENABLED}
+    path: "${OPENAI_COMPATIBLE_PATH}"
+    auth_tokens: ${OPENAI_COMPATIBLE_AUTH_TOKENS}
 
 log:
-  enabled: true
-  file_path: "logs/translation.log"
-  max_size: 100          # 单个文件最大大小，单位：MB
-  max_age: 30            # 保留天数
-  max_backups: 10        # 最大备份文件数
-  queue_size: 10000       # 异步队列大小
+  enabled: ${LOG_ENABLED}
+  file_path: "${LOG_FILE_PATH}"
+  max_size: ${LOG_MAX_SIZE}
+  max_age: ${LOG_MAX_AGE}
+  max_backups: ${LOG_MAX_BACKUPS}
+  queue_size: ${LOG_QUEUE_SIZE}

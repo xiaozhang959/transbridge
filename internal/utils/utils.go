@@ -66,20 +66,21 @@ func ExtractLanguageCode(code string) string {
 // ApplyPromptTemplate replaces placeholders in the prompt template with actual values.
 //
 // Supported placeholders:
-//   - {{input}}        → the input text
-//   - {{source_lang}}  → the source language
-//   - {{target_lang}}  → the target language
+//   - {{input}} or {{text}} → the input text
+//   - {{source_lang}}       → the source language
+//   - {{target_lang}}       → the target language
 //
-// If the template does not contain {{input}}, it is considered invalid,
+// If the template does not contain {{input}} or {{text}}, it is considered invalid,
 // and a default fallback template will be used instead.
 func ApplyPromptTemplate(template, input, sourceLang, targetLang string) string {
-	// Validate the template: must contain {{input}} to be meaningful
-	if !strings.Contains(template, "{{input}}") {
+	// Validate the template: must contain {{input}} or {{text}} to be meaningful
+	if !strings.Contains(template, "{{input}}") && !strings.Contains(template, "{{text}}") {
 		template = "Translate the following text from {{source_lang}} to {{target_lang}}:\n\n{{input}}"
 	}
 
 	replacer := strings.NewReplacer(
 		"{{input}}", input,
+		"{{text}}", input,
 		"{{source_lang}}", sourceLang,
 		"{{target_lang}}", targetLang,
 	)
