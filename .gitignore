@@ -43,3 +43,6 @@ logs/*.log
 
 # 测试覆盖率报告
 coverage.out
+
+合并/
+合并/*

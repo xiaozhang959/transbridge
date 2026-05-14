@@ -14,6 +14,7 @@ type Config struct {
 	Prompt    PromptConfig     `yaml:"prompt"`
 	OpenAI    OpenAIConfig     `yaml:"openai"`
 	TransAPI  TransAPI         `yaml:"transapi"`
+	Telegram  TelegramConfig   `yaml:"telegram"`
 	Log       LogConfig        `yaml:"log"`
 }
 
@@ -89,6 +90,16 @@ type StorageConfig struct {
 
 type TransAPI struct {
 	Tokens []string `yaml:"tokens"`
+}
+
+type TelegramConfig struct {
+	Enabled            bool    `yaml:"enabled"`
+	BotToken           string  `yaml:"bot_token"`
+	AllowedChatIDs     []int64 `yaml:"allowed_chat_ids"`
+	AllowedUserIDs     []int64 `yaml:"allowed_user_ids"`
+	DeleteAfterSeconds int     `yaml:"delete_after_seconds"`
+	PollTimeoutSeconds int     `yaml:"poll_timeout_seconds"`
+	APIBaseURL         string  `yaml:"api_base_url"`
 }
 
 // LoadConfig loads .env from the config directory, then reads YAML and

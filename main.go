@@ -3,11 +3,11 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"os/signal"
 	"syscall"
 	"time"
@@ -18,6 +18,7 @@ import (
 	"transbridge/internal/middleware"
 	"transbridge/logger"
 	"transbridge/service"
+	"transbridge/telegrambot"
 	"transbridge/translator"
 )
 
@@ -76,18 +77,40 @@ func main() {
 	// 初始化 HTTP 服务器
 	server := setupServer(cfg, translationService, modelManager)
 
+	// 初始化 Telegram Bot
+	bot, err := telegrambot.New(cfg.Telegram, translationService, cfg.Prompt.Template)
+	if err != nil {
+		log.Fatalf("Failed to initialize telegram bot: %v", err)
+	}
+
+	runCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	errCh := make(chan error, 2)
+
 	// 启动服务器
 	go func() {
 		log.Printf("Starting server on port %d", cfg.Server.Port)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Printf("Server error: %v", err)
+			errCh <- fmt.Errorf("http server error: %w", err)
 		}
 	}()
 
-	// 等待终止信号
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
+	if bot != nil {
+		go func() {
+			if err := bot.Run(runCtx); err != nil && !errors.Is(err, context.Canceled) {
+				errCh <- fmt.Errorf("telegram bot error: %w", err)
+			}
+		}()
+	}
+
+	select {
+	case <-runCtx.Done():
+		log.Println("Received shutdown signal")
+	case err := <-errCh:
+		log.Printf("Application stopped by internal error: %v", err)
+		stop()
+	}
 
 	// 优雅关闭
 	log.Println("Shutting down server...")

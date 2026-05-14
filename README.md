@@ -99,6 +99,14 @@ OPENAI_COMPATIBLE_ENABLED=false
 OPENAI_COMPATIBLE_PATH=/v1
 OPENAI_COMPATIBLE_AUTH_TOKENS=[]
 
+TELEGRAM_ENABLED=false
+TELEGRAM_BOT_TOKEN=1234567890:your_bot_token
+TELEGRAM_ALLOWED_CHAT_IDS=[-1001234567890]
+TELEGRAM_ALLOWED_USER_IDS=[123456789]
+TELEGRAM_DELETE_AFTER_SECONDS=60
+TELEGRAM_POLL_TIMEOUT_SECONDS=30
+TELEGRAM_API_BASE_URL=https://api.telegram.org
+
 LOG_ENABLED=true
 LOG_FILE_PATH=logs/translation.log
 LOG_MAX_SIZE=10
@@ -157,6 +165,15 @@ openai:
     path: "${OPENAI_COMPATIBLE_PATH}"
     auth_tokens: ${OPENAI_COMPATIBLE_AUTH_TOKENS}
 
+telegram:
+  enabled: ${TELEGRAM_ENABLED}
+  bot_token: "${TELEGRAM_BOT_TOKEN}"
+  allowed_chat_ids: ${TELEGRAM_ALLOWED_CHAT_IDS}
+  allowed_user_ids: ${TELEGRAM_ALLOWED_USER_IDS}
+  delete_after_seconds: ${TELEGRAM_DELETE_AFTER_SECONDS}
+  poll_timeout_seconds: ${TELEGRAM_POLL_TIMEOUT_SECONDS}
+  api_base_url: "${TELEGRAM_API_BASE_URL}"
+
 log:
   enabled: ${LOG_ENABLED}
   file_path: "${LOG_FILE_PATH}"
@@ -172,6 +189,9 @@ log:
 - 数组字段需写成 YAML/JSON inline 风格，例如：
   - `CACHE_TYPES=["memory"]`
   - `TRANSAPI_TOKENS=["tr-demo-token"]`
+- Telegram 的 ID 列表同样使用 inline 数组格式，例如：
+  - `TELEGRAM_ALLOWED_CHAT_IDS=[-1001234567890]`
+  - `TELEGRAM_ALLOWED_USER_IDS=[123456789]`
 - 如果你要启用 Redis，请把 `CACHE_TYPES` 改成：
 
 ```env
@@ -179,6 +199,41 @@ CACHE_TYPES=["memory","redis"]
 ```
 
 并补齐 Redis 相关变量
+
+### Telegram Bot 说明
+
+当你希望当前 Go 服务直接承担 Telegram Bot 能力时，请配置：
+
+```env
+TELEGRAM_ENABLED=true
+TELEGRAM_BOT_TOKEN=1234567890:your_bot_token
+```
+
+可选限制项：
+
+- `TELEGRAM_ALLOWED_CHAT_IDS`：允许使用机器人的群组列表
+- `TELEGRAM_ALLOWED_USER_IDS`：允许使用机器人的用户列表
+
+如果这两个列表都留空（即 `[]`），则默认允许所有会话使用。
+
+支持的 Telegram 行为：
+
+- `/ts <text>`
+- `/translate <text>`
+- 回复一条消息后发送 `ts` / `translate` / `翻译`
+- 直接发送 `ts <text>` / `翻译 <text>`
+- `/auto` 开启或关闭当前会话自动翻译
+- `/get_user_id`
+- `/get_group_id`
+- `/start`
+
+匿名管理员说明：
+
+- Telegram 的匿名管理员消息可能以 `sender_chat` 形式出现
+- 如果你希望匿名管理员也能正常触发机器人，**建议把群组 ID 加入**
+  `TELEGRAM_ALLOWED_CHAT_IDS`
+- 如果没有权限的用户或群组发送消息，机器人会返回对应的 ID 提示，
+  便于你加入白名单
 
 ---
 
@@ -231,6 +286,12 @@ chmod +x ./transbridge-linux-amd64
 
 ```bash
 SERVER_PORT=9090 ./transbridge-linux-amd64 -config ./config.yml
+```
+
+如果要启用 Telegram Bot：
+
+```bash
+TELEGRAM_ENABLED=true ./transbridge-linux-amd64 -config ./config.yml
 ```
 
 ---

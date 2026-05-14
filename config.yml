@@ -45,6 +45,15 @@ openai:
     path: "${OPENAI_COMPATIBLE_PATH}"
     auth_tokens: ${OPENAI_COMPATIBLE_AUTH_TOKENS}
 
+telegram:
+  enabled: ${TELEGRAM_ENABLED}
+  bot_token: "${TELEGRAM_BOT_TOKEN}"
+  allowed_chat_ids: ${TELEGRAM_ALLOWED_CHAT_IDS}
+  allowed_user_ids: ${TELEGRAM_ALLOWED_USER_IDS}
+  delete_after_seconds: ${TELEGRAM_DELETE_AFTER_SECONDS}
+  poll_timeout_seconds: ${TELEGRAM_POLL_TIMEOUT_SECONDS}
+  api_base_url: "${TELEGRAM_API_BASE_URL}"
+
 log:
   enabled: ${LOG_ENABLED}
   file_path: "${LOG_FILE_PATH}"
