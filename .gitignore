@@ -44,8 +44,6 @@ logs/*.log
 # 测试覆盖率报告
 coverage.out
 
-合并/
-合并/*
 # 本地 Agent/工具缓存
 .serena/
 
