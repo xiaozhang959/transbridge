@@ -17,8 +17,6 @@ transbridge.exe
 *.out
 
 # Go模块缓存和包缓存
-go.sum
-go.mod
 vendor/
 
 # 开发工具生成的文件
