@@ -40,18 +40,5 @@
     "LOG_MAX_AGE": "10",
     "LOG_MAX_BACKUPS": "5",
     "LOG_QUEUE_SIZE": "10000"
-  },
-  "rewrites": [
-    { "source": "/translate", "destination": "/api/index.go?__path=/translate" },
-    { "source": "/immersivel", "destination": "/api/index.go?__path=/immersivel" },
-    { "source": "/v1/chat/completions", "destination": "/api/index.go?__path=/v1/chat/completions" },
-    { "source": "/v1/models", "destination": "/api/index.go?__path=/v1/models" },
-    { "source": "/telegram/webhook", "destination": "/api/index.go?__path=/telegram/webhook" },
-    { "source": "/health", "destination": "/api/index.go?__path=/health" }
-  ],
-  "functions": {
-    "api/index.go": {
-      "maxDuration": 300
-    }
   }
 }

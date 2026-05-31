@@ -243,8 +243,8 @@ TELEGRAM_BOT_TOKEN=1234567890:your_bot_token
 
 [![Deploy with Vercel](https://vercel.com/button)][vercel-deploy]
 
-项目已提供 `api/index.go` 和 `vercel.json`，可在 Vercel 上以 Go
-Serverless Function 方式运行：
+项目已提供 `main.go` 和 `vercel.json`，可在 Vercel 上以 Go HTTP
+Server 方式运行。Vercel 会注入 `PORT`，应用会自动监听该端口：
 
 - `/translate`
 - `/immersivel`

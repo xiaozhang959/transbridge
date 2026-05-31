@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"os/signal"
 	"syscall"
 	"time"
@@ -20,12 +21,18 @@ func main() {
 
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 
-	application, err := app.New(*configFile, app.Options{})
+	runningOnVercel := os.Getenv("VERCEL") != ""
+	application, err := app.New(*configFile, app.Options{
+		Serverless: runningOnVercel,
+	})
 	if err != nil {
 		log.Fatalf("Failed to initialize application: %v", err)
 	}
 
 	server := application.HTTPServer()
+	if port := os.Getenv("PORT"); port != "" {
+		server.Addr = ":" + port
+	}
 
 	runCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -33,18 +40,20 @@ func main() {
 	errCh := make(chan error, 2)
 
 	go func() {
-		log.Printf("Starting server on port %d", application.Config.Server.Port)
+		log.Printf("Starting server on %s", server.Addr)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			errCh <- fmt.Errorf("http server error: %w", err)
 		}
 	}()
 
-	if application.TelegramBot != nil {
+	if application.TelegramBot != nil && !runningOnVercel {
 		go func() {
 			if err := application.TelegramBot.Run(runCtx); err != nil && !errors.Is(err, context.Canceled) {
 				errCh <- fmt.Errorf("telegram bot error: %w", err)
 			}
 		}()
+	} else if application.TelegramBot != nil {
+		log.Println("Telegram polling disabled on Vercel; use /telegram/webhook")
 	}
 
 	select {
