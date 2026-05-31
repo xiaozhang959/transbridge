@@ -2,7 +2,6 @@
 .DS_Store
 Thumbs.db
 
-config.yml
 config_maas.yml
 config_maas_fuzhuang.yml
 # 项目可执行文件

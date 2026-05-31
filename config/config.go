@@ -117,7 +117,11 @@ func LoadConfig(filename string) (*Config, error) {
 
 	data, err := os.ReadFile(filename)
 	if err != nil {
-		return nil, err
+		if os.IsNotExist(err) && os.Getenv("VERCEL") != "" {
+			data = []byte(defaultConfigYAML)
+		} else {
+			return nil, err
+		}
 	}
 
 	data = []byte(expandEnvPlaceholders(string(data)))
@@ -146,3 +150,74 @@ func clearUnexpandedOptionalString(value *string) {
 		*value = ""
 	}
 }
+
+const defaultConfigYAML = `
+server:
+  port: ${SERVER_PORT}
+
+providers:
+  - provider: "${PROVIDER_1_TYPE}"
+    api_url: "${PROVIDER_1_API_URL}"
+    api_key: "${PROVIDER_1_API_KEY}"
+    timeout: ${PROVIDER_1_TIMEOUT}
+    is_default: ${PROVIDER_1_IS_DEFAULT}
+    models:
+      - name: "${PROVIDER_1_MODEL_1_NAME}"
+        weight: ${PROVIDER_1_MODEL_1_WEIGHT}
+        top_p: ${PROVIDER_1_MODEL_1_TOP_P}
+        max_tokens: ${PROVIDER_1_MODEL_1_MAX_TOKENS}
+        temperature: ${PROVIDER_1_MODEL_1_TEMPERATURE}
+      - name: "${PROVIDER_1_MODEL_2_NAME}"
+        weight: ${PROVIDER_1_MODEL_2_WEIGHT}
+        top_p: ${PROVIDER_1_MODEL_2_TOP_P}
+        max_tokens: ${PROVIDER_1_MODEL_2_MAX_TOKENS}
+        temperature: ${PROVIDER_1_MODEL_2_TEMPERATURE}
+
+cache:
+  enabled: ${CACHE_ENABLED}
+  types: ${CACHE_TYPES}
+  memory:
+    ttl:
+      value: "${CACHE_MEMORY_TTL}"
+    max_size: ${CACHE_MEMORY_MAX_SIZE}
+  redis:
+    host: "${REDIS_HOST}"
+    port: ${REDIS_CACHE_PORT}
+    password: "${REDIS_PASSWORD}"
+    db: ${REDIS_DB}
+    tls: false
+    ttl:
+      value: "${REDIS_TTL}"
+
+prompt:
+  template: >-
+    ${PROMPT_TEMPLATE}
+
+transapi:
+  tokens: ${TRANSAPI_TOKENS}
+
+openai:
+  compatible_api:
+    enabled: ${OPENAI_COMPATIBLE_ENABLED}
+    path: "${OPENAI_COMPATIBLE_PATH}"
+    auth_tokens: ${OPENAI_COMPATIBLE_AUTH_TOKENS}
+
+telegram:
+  enabled: ${TELEGRAM_ENABLED}
+  bot_token: "${TELEGRAM_BOT_TOKEN}"
+  bot_username: "${TELEGRAM_BOT_USERNAME}"
+  webhook_secret: "${TELEGRAM_WEBHOOK_SECRET}"
+  allowed_chat_ids: ${TELEGRAM_ALLOWED_CHAT_IDS}
+  allowed_user_ids: ${TELEGRAM_ALLOWED_USER_IDS}
+  delete_after_seconds: ${TELEGRAM_DELETE_AFTER_SECONDS}
+  poll_timeout_seconds: ${TELEGRAM_POLL_TIMEOUT_SECONDS}
+  api_base_url: "${TELEGRAM_API_BASE_URL}"
+
+log:
+  enabled: ${LOG_ENABLED}
+  file_path: "${LOG_FILE_PATH}"
+  max_size: ${LOG_MAX_SIZE}
+  max_age: ${LOG_MAX_AGE}
+  max_backups: ${LOG_MAX_BACKUPS}
+  queue_size: ${LOG_QUEUE_SIZE}
+`
