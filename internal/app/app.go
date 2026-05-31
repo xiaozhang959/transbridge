@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -118,6 +119,35 @@ func (a *App) Close(ctx context.Context) error {
 
 func (a *App) setupMux() http.Handler {
 	mux := http.NewServeMux()
+
+	mux.HandleFunc("/",
+		middleware.Chain(
+			func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/" {
+					http.NotFound(w, r)
+					return
+				}
+
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"name":    "TransBridge",
+					"status":  "ok",
+					"message": "TransBridge translation API is running.",
+					"routes": []string{
+						"GET /health",
+						"POST /translate",
+						"POST /immersivel",
+						"GET /v1/models",
+						"POST /v1/chat/completions",
+						"POST /telegram/webhook",
+					},
+				})
+			},
+			middleware.Recovery,
+			middleware.Logger,
+			middleware.CORS,
+		),
+	)
 
 	translationHandler := translate_handler.NewHandler(a.translationService, translate_handler.HandlerConfig{
 		AuthTokens:     a.Config.TransAPI.Tokens,

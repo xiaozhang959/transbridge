@@ -114,6 +114,7 @@ func LoadConfig(filename string) (*Config, error) {
 	if err := loadDotEnvFile(envPath); err != nil {
 		return nil, err
 	}
+	applyDefaultEnvValues()
 
 	data, err := os.ReadFile(filename)
 	if err != nil {
@@ -221,3 +222,60 @@ log:
   max_backups: ${LOG_MAX_BACKUPS}
   queue_size: ${LOG_QUEUE_SIZE}
 `
+
+func applyDefaultEnvValues() {
+	defaults := map[string]string{
+		"SERVER_PORT":                    "8080",
+		"PROVIDER_1_TYPE":                "openai",
+		"PROVIDER_1_API_URL":             "https://api.openai.com/v1/chat/completions",
+		"PROVIDER_1_API_KEY":             "",
+		"PROVIDER_1_TIMEOUT":             "30",
+		"PROVIDER_1_IS_DEFAULT":          "true",
+		"PROVIDER_1_MODEL_1_NAME":        "gpt-4o-mini",
+		"PROVIDER_1_MODEL_1_WEIGHT":      "10",
+		"PROVIDER_1_MODEL_1_TOP_P":       "1",
+		"PROVIDER_1_MODEL_1_MAX_TOKENS":  "4000",
+		"PROVIDER_1_MODEL_1_TEMPERATURE": "0.2",
+		"PROVIDER_1_MODEL_2_NAME":        "gpt-4.1-mini",
+		"PROVIDER_1_MODEL_2_WEIGHT":      "5",
+		"PROVIDER_1_MODEL_2_TOP_P":       "1",
+		"PROVIDER_1_MODEL_2_MAX_TOKENS":  "4000",
+		"PROVIDER_1_MODEL_2_TEMPERATURE": "0.2",
+		"CACHE_ENABLED":                  "true",
+		"CACHE_TYPES":                    "[\"memory\"]",
+		"CACHE_MEMORY_TTL":               "1h",
+		"CACHE_MEMORY_MAX_SIZE":          "10000",
+		"REDIS_HOST":                     "127.0.0.1",
+		"REDIS_CACHE_PORT":               "6379",
+		"REDIS_PASSWORD":                 "",
+		"REDIS_TLS":                      "false",
+		"REDIS_DB":                       "0",
+		"REDIS_TTL":                      "24h",
+		"PROMPT_TEMPLATE":                "Translate the following {{input}} from {{source_lang}} to {{target_lang}}. Return only the final translation result.",
+		"TRANSAPI_TOKENS":                "[]",
+		"OPENAI_COMPATIBLE_ENABLED":      "false",
+		"OPENAI_COMPATIBLE_PATH":         "/v1",
+		"OPENAI_COMPATIBLE_AUTH_TOKENS":  "[]",
+		"TELEGRAM_ENABLED":               "false",
+		"TELEGRAM_BOT_TOKEN":             "",
+		"TELEGRAM_BOT_USERNAME":          "",
+		"TELEGRAM_WEBHOOK_SECRET":        "",
+		"TELEGRAM_ALLOWED_CHAT_IDS":      "[]",
+		"TELEGRAM_ALLOWED_USER_IDS":      "[]",
+		"TELEGRAM_DELETE_AFTER_SECONDS":  "60",
+		"TELEGRAM_POLL_TIMEOUT_SECONDS":  "30",
+		"TELEGRAM_API_BASE_URL":          "https://api.telegram.org",
+		"LOG_ENABLED":                    "false",
+		"LOG_FILE_PATH":                  "logs/translation.log",
+		"LOG_MAX_SIZE":                   "10",
+		"LOG_MAX_AGE":                    "10",
+		"LOG_MAX_BACKUPS":                "5",
+		"LOG_QUEUE_SIZE":                 "10000",
+	}
+
+	for key, value := range defaults {
+		if _, exists := os.LookupEnv(key); !exists {
+			_ = os.Setenv(key, value)
+		}
+	}
+}
