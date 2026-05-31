@@ -46,3 +46,8 @@ coverage.out
 
 合并/
 合并/*
+# 本地 Agent/工具缓存
+.serena/
+
+# 本地合并临时目录
+合并/
