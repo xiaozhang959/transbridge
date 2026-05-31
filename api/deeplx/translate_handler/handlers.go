@@ -22,7 +22,6 @@ type HandlerConfig struct {
 }
 
 func NewHandler(translationService *service.TranslationService, config HandlerConfig) *Handler {
-	log.Println(config.AuthTokens)
 	// 将 API 密钥列表转换为 map 以便快速查找
 	authTokens := make(map[string]bool)
 	for _, token := range config.AuthTokens {

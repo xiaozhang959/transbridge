@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"transbridge/cache"
 	"transbridge/config"
 	"transbridge/service"
 	"unicode"
@@ -28,6 +29,7 @@ type Bot struct {
 	promptTemplate     string
 	client             *apiClient
 	username           string
+	state              cache.Cache
 
 	mu            sync.RWMutex
 	lastMessages  map[userChatKey]messageSnapshot
@@ -56,6 +58,10 @@ type senderContext struct {
 }
 
 func New(cfg config.TelegramConfig, translationService *service.TranslationService, promptTemplate string) (*Bot, error) {
+	return NewWithState(cfg, translationService, promptTemplate, nil)
+}
+
+func NewWithState(cfg config.TelegramConfig, translationService *service.TranslationService, promptTemplate string, state cache.Cache) (*Bot, error) {
 	if !cfg.Enabled {
 		return nil, nil
 	}
@@ -79,6 +85,8 @@ func New(cfg config.TelegramConfig, translationService *service.TranslationServi
 		translationService: translationService,
 		promptTemplate:     promptTemplate,
 		client:             newAPIClient(cfg.APIBaseURL, cfg.BotToken),
+		username:           strings.TrimPrefix(strings.TrimSpace(cfg.BotUsername), "@"),
+		state:              state,
 		lastMessages:       make(map[userChatKey]messageSnapshot),
 		autoTranslate:      make(map[userChatKey]bool),
 		allowedChats:       make(map[int64]struct{}),
@@ -96,11 +104,9 @@ func New(cfg config.TelegramConfig, translationService *service.TranslationServi
 }
 
 func (b *Bot) Run(ctx context.Context) error {
-	me, err := b.client.getMe(ctx)
-	if err != nil {
-		return fmt.Errorf("get telegram bot profile failed: %w", err)
+	if err := b.ensureUsername(ctx); err != nil {
+		return err
 	}
-	b.username = me.UserName
 	log.Printf("Telegram bot started: @%s", b.username)
 
 	var offset int64
@@ -143,6 +149,66 @@ func (b *Bot) Run(ctx context.Context) error {
 	}
 }
 
+func (b *Bot) HandleWebhook(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	if secret := strings.TrimSpace(b.cfg.WebhookSecret); secret != "" {
+		if r.Header.Get("X-Telegram-Bot-Api-Secret-Token") != secret {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+	}
+
+	if err := b.ensureUsername(r.Context()); err != nil {
+		log.Printf("get telegram bot profile failed: %v", err)
+		w.WriteHeader(http.StatusBadGateway)
+		return
+	}
+
+	var update telegramUpdate
+	if err := json.NewDecoder(r.Body).Decode(&update); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte("invalid telegram update"))
+		return
+	}
+
+	if update.Message != nil {
+		if err := b.handleMessage(r.Context(), update.Message); err != nil {
+			log.Printf("Telegram webhook message handling failed: %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+	}
+
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte("OK"))
+}
+
+func (b *Bot) ensureUsername(ctx context.Context) error {
+	b.mu.RLock()
+	username := strings.TrimSpace(b.username)
+	b.mu.RUnlock()
+	if username != "" {
+		return nil
+	}
+
+	me, err := b.client.getMe(ctx)
+	if err != nil {
+		return fmt.Errorf("get telegram bot profile failed: %w", err)
+	}
+
+	b.mu.Lock()
+	if strings.TrimSpace(b.username) == "" {
+		b.username = me.UserName
+	}
+	b.mu.Unlock()
+
+	return nil
+}
+
 func (b *Bot) handleMessage(ctx context.Context, message *telegramMessage) error {
 	if message == nil {
 		return nil
@@ -178,9 +244,9 @@ func (b *Bot) handleMessage(ctx context.Context, message *telegramMessage) error
 		return nil
 	}
 
-	b.recordLastMessage(message)
+	b.recordLastMessage(ctx, message)
 
-	if b.isAutoTranslateEnabled(sender.ChatID, sender.KeyID) {
+	if b.isAutoTranslateEnabled(ctx, sender.ChatID, sender.KeyID) {
 		return b.translateAndReply(ctx, message, content, replyOptions{
 			ReplyToMessageID: message.MessageID,
 			AutoDelete:       true,
@@ -204,7 +270,7 @@ func (b *Bot) handleCommand(ctx context.Context, message *telegramMessage, comma
 		return b.replyText(ctx, message.Chat.ID, message.MessageID, "这个命令只能在群组中使用。", false)
 	case "auto":
 		sender := resolveSender(message)
-		enabled := b.toggleAutoTranslate(message.Chat.ID, sender.KeyID)
+		enabled := b.toggleAutoTranslate(ctx, message.Chat.ID, sender.KeyID)
 		status := "开启"
 		if !enabled {
 			status = "关闭"
@@ -239,7 +305,7 @@ func (b *Bot) handleTranslateCommand(ctx context.Context, message *telegramMessa
 	}
 
 	sender := resolveSender(message)
-	lastMessage, ok := b.getLastMessage(message.Chat.ID, sender.KeyID)
+	lastMessage, ok := b.getLastMessage(ctx, message.Chat.ID, sender.KeyID)
 	if !ok || strings.TrimSpace(lastMessage.Text) == "" {
 		return b.replyText(ctx, message.Chat.ID, message.MessageID, "没有可供翻译的上一条消息。", false)
 	}
@@ -295,7 +361,7 @@ func (b *Bot) handleMentionTrigger(ctx context.Context, message *telegramMessage
 	}
 
 	sender := resolveSender(message)
-	lastMessage, ok := b.getLastMessage(message.Chat.ID, sender.KeyID)
+	lastMessage, ok := b.getLastMessage(ctx, message.Chat.ID, sender.KeyID)
 	if !ok || strings.TrimSpace(lastMessage.Text) == "" {
 		return true
 	}
@@ -326,7 +392,7 @@ func (b *Bot) handleTextPrefixTrigger(ctx context.Context, message *telegramMess
 	}
 
 	sender := resolveSender(message)
-	lastMessage, ok := b.getLastMessage(message.Chat.ID, sender.KeyID)
+	lastMessage, ok := b.getLastMessage(ctx, message.Chat.ID, sender.KeyID)
 	if !ok || strings.TrimSpace(lastMessage.Text) == "" {
 		return true
 	}
@@ -403,15 +469,13 @@ func (b *Bot) scheduleDelete(ctx context.Context, chatID, messageID int64) {
 		timer := time.NewTimer(time.Duration(b.cfg.DeleteAfterSeconds) * time.Second)
 		defer timer.Stop()
 
-		select {
-		case <-ctx.Done():
-			return
-		case <-timer.C:
-			deleteCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-			if err := b.client.deleteMessage(deleteCtx, chatID, messageID); err != nil {
-				log.Printf("delete telegram message failed: %v", err)
-			}
+		<-timer.C
+
+		// Webhook 请求返回后 r.Context 会被取消，删除任务需要脱离请求上下文。
+		deleteCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+		defer cancel()
+		if err := b.client.deleteMessage(deleteCtx, chatID, messageID); err != nil {
+			log.Printf("delete telegram message failed: %v", err)
 		}
 	}()
 }
@@ -436,7 +500,7 @@ func (b *Bot) isAllowed(chatID, userID, senderChatID int64) bool {
 	return false
 }
 
-func (b *Bot) recordLastMessage(message *telegramMessage) {
+func (b *Bot) recordLastMessage(ctx context.Context, message *telegramMessage) {
 	text := strings.TrimSpace(extractMessageText(message))
 	if text == "" {
 		return
@@ -448,51 +512,118 @@ func (b *Bot) recordLastMessage(message *telegramMessage) {
 		ChatID:   message.Chat.ID,
 	}
 
-	b.mu.Lock()
-	b.lastMessages[key] = messageSnapshot{
+	snapshot := messageSnapshot{
 		ChatID:    message.Chat.ID,
 		MessageID: message.MessageID,
 		Text:      text,
 	}
+
+	b.mu.Lock()
+	b.lastMessages[key] = snapshot
 	b.mu.Unlock()
+
+	if b.state != nil {
+		data, err := json.Marshal(snapshot)
+		if err == nil {
+			if err := b.state.Set(ctx, stateLastMessageKey(message.Chat.ID, sender.KeyID), string(data), 24*time.Hour); err != nil {
+				log.Printf("save telegram last message failed: %v", err)
+			}
+		}
+	}
 }
 
-func (b *Bot) getLastMessage(chatID, senderID int64) (messageSnapshot, bool) {
+func (b *Bot) getLastMessage(ctx context.Context, chatID, senderID int64) (messageSnapshot, bool) {
 	key := userChatKey{
 		SenderID: senderID,
 		ChatID:   chatID,
 	}
 
 	b.mu.RLock()
-	defer b.mu.RUnlock()
-
 	value, ok := b.lastMessages[key]
-	return value, ok
-}
+	b.mu.RUnlock()
+	if ok {
+		return value, true
+	}
 
-func (b *Bot) toggleAutoTranslate(chatID, senderID int64) bool {
-	key := userChatKey{
-		SenderID: senderID,
-		ChatID:   chatID,
+	if b.state == nil {
+		return messageSnapshot{}, false
+	}
+
+	data, err := b.state.Get(ctx, stateLastMessageKey(chatID, senderID))
+	if err != nil || strings.TrimSpace(data) == "" {
+		return messageSnapshot{}, false
+	}
+
+	var snapshot messageSnapshot
+	if err := json.Unmarshal([]byte(data), &snapshot); err != nil {
+		return messageSnapshot{}, false
 	}
 
 	b.mu.Lock()
-	defer b.mu.Unlock()
+	b.lastMessages[key] = snapshot
+	b.mu.Unlock()
 
-	current := b.autoTranslate[key]
-	b.autoTranslate[key] = !current
-	return !current
+	return snapshot, true
 }
 
-func (b *Bot) isAutoTranslateEnabled(chatID, senderID int64) bool {
+func (b *Bot) toggleAutoTranslate(ctx context.Context, chatID, senderID int64) bool {
+	key := userChatKey{
+		SenderID: senderID,
+		ChatID:   chatID,
+	}
+
+	current := b.isAutoTranslateEnabled(ctx, chatID, senderID)
+	next := !current
+
+	b.mu.Lock()
+	b.autoTranslate[key] = next
+	b.mu.Unlock()
+
+	if b.state != nil {
+		if err := b.state.Set(ctx, stateAutoTranslateKey(chatID, senderID), fmt.Sprintf("%t", next), 30*24*time.Hour); err != nil {
+			log.Printf("save telegram auto translate state failed: %v", err)
+		}
+	}
+
+	return next
+}
+
+func (b *Bot) isAutoTranslateEnabled(ctx context.Context, chatID, senderID int64) bool {
 	key := userChatKey{
 		SenderID: senderID,
 		ChatID:   chatID,
 	}
 
 	b.mu.RLock()
-	defer b.mu.RUnlock()
-	return b.autoTranslate[key]
+	value, ok := b.autoTranslate[key]
+	b.mu.RUnlock()
+	if ok {
+		return value
+	}
+
+	if b.state == nil {
+		return false
+	}
+
+	data, err := b.state.Get(ctx, stateAutoTranslateKey(chatID, senderID))
+	if err != nil {
+		return false
+	}
+
+	enabled := strings.EqualFold(strings.TrimSpace(data), "true")
+	b.mu.Lock()
+	b.autoTranslate[key] = enabled
+	b.mu.Unlock()
+
+	return enabled
+}
+
+func stateLastMessageKey(chatID, senderID int64) string {
+	return fmt.Sprintf("telegram:last_message:%d:%d", chatID, senderID)
+}
+
+func stateAutoTranslateKey(chatID, senderID int64) string {
+	return fmt.Sprintf("telegram:auto_translate:%d:%d", chatID, senderID)
 }
 
 func detectTargetLanguage(text string) string {

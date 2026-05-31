@@ -15,6 +15,7 @@ type RedisCacheOptions struct {
 	Port       int
 	Password   string
 	DB         int
+	TLS        bool
 	DefaultTTL time.Duration // 默认过期时间
 	Permanent  bool          // 是否永久存储
 }

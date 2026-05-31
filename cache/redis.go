@@ -2,6 +2,7 @@ package cache
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"time"
 
@@ -16,11 +17,18 @@ type RedisCache struct {
 
 // NewRedisCache 创建一个新的Redis缓存
 func NewRedisCache(opts RedisCacheOptions) *RedisCache {
-	client := redis.NewClient(&redis.Options{
+	redisOptions := &redis.Options{
 		Addr:     fmt.Sprintf("%s:%d", opts.Host, opts.Port),
 		Password: opts.Password,
 		DB:       opts.DB,
-	})
+	}
+	if opts.TLS {
+		redisOptions.TLSConfig = &tls.Config{
+			MinVersion: tls.VersionTLS12,
+		}
+	}
+
+	client := redis.NewClient(redisOptions)
 
 	// 设置默认TTL
 	defaultTTL := opts.DefaultTTL

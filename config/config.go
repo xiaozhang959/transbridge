@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"gopkg.in/yaml.v2"
 )
@@ -66,6 +67,7 @@ type RedisConfig struct {
 	Port     int    `yaml:"port"`
 	Password string `yaml:"password"`
 	DB       int    `yaml:"db"`
+	TLS      bool   `yaml:"tls"`
 	TTL      TTL    `yaml:"ttl"`
 }
 
@@ -95,6 +97,8 @@ type TransAPI struct {
 type TelegramConfig struct {
 	Enabled            bool    `yaml:"enabled"`
 	BotToken           string  `yaml:"bot_token"`
+	BotUsername        string  `yaml:"bot_username"`
+	WebhookSecret      string  `yaml:"webhook_secret"`
 	AllowedChatIDs     []int64 `yaml:"allowed_chat_ids"`
 	AllowedUserIDs     []int64 `yaml:"allowed_user_ids"`
 	DeleteAfterSeconds int     `yaml:"delete_after_seconds"`
@@ -122,5 +126,22 @@ func LoadConfig(filename string) (*Config, error) {
 		return nil, err
 	}
 
+	if value, ok := os.LookupEnv("REDIS_TLS"); ok {
+		if parsed, err := strconv.ParseBool(value); err == nil {
+			config.Cache.Redis.TLS = parsed
+		}
+	}
+	clearUnexpandedOptionalString(&config.Telegram.BotUsername)
+	clearUnexpandedOptionalString(&config.Telegram.WebhookSecret)
+
 	return &config, nil
+}
+
+func clearUnexpandedOptionalString(value *string) {
+	if value == nil {
+		return
+	}
+	if envPattern.MatchString(*value) {
+		*value = ""
+	}
 }

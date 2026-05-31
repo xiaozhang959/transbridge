@@ -29,6 +29,7 @@ cache:
     port: ${REDIS_CACHE_PORT}
     password: "${REDIS_PASSWORD}"
     db: ${REDIS_DB}
+    tls: false
     ttl:
       value: "${REDIS_TTL}"
 
@@ -48,6 +49,8 @@ openai:
 telegram:
   enabled: ${TELEGRAM_ENABLED}
   bot_token: "${TELEGRAM_BOT_TOKEN}"
+  bot_username: "${TELEGRAM_BOT_USERNAME}"
+  webhook_secret: "${TELEGRAM_WEBHOOK_SECRET}"
   allowed_chat_ids: ${TELEGRAM_ALLOWED_CHAT_IDS}
   allowed_user_ids: ${TELEGRAM_ALLOWED_USER_IDS}
   delete_after_seconds: ${TELEGRAM_DELETE_AFTER_SECONDS}

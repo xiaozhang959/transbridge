@@ -165,6 +165,64 @@ Docker Compose 配置提供了以下功能：
 - 健康检查和自动重启
 - 灵活的环境变量配置
 
+## ▲ Vercel 部署
+
+[![Deploy with Vercel](https://vercel.com/button)][vercel-deploy]
+
+项目已内置 Vercel Go Serverless Function 入口：
+
+```text
+api/index.go
+vercel.json
+```
+
+部署步骤：
+
+1. 将仓库导入 Vercel
+2. 在 Environment Variables 中配置 `config.yml` 使用到的变量
+3. 部署后访问：
+   - `https://your-domain.vercel.app/translate`
+   - `https://your-domain.vercel.app/immersivel`
+   - `https://your-domain.vercel.app/v1/chat/completions`
+   - `https://your-domain.vercel.app/v1/models`
+   - `https://your-domain.vercel.app/health`
+
+一键部署按钮会自动列出 Vercel 需要的环境变量，并为非敏感配置预填默认值。
+`vercel.json` 也内置了非敏感默认值，敏感项仍需要手动填写。
+最少需要手动填写：
+
+```env
+PROVIDER_1_API_KEY=sk-your-api-key
+TRANSAPI_TOKENS=["tr-demo-token"]
+```
+
+也可以参考仓库根目录的 `.env.vercel.example` 手动配置。
+
+Telegram Bot 在 Vercel 上必须使用 webhook：
+
+```bash
+curl -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook" \
+  -d "url=https://your-domain.vercel.app/telegram/webhook" \
+  -d "secret_token=${TELEGRAM_WEBHOOK_SECRET}"
+```
+
+建议额外配置：
+
+```env
+TELEGRAM_ENABLED=true
+TELEGRAM_BOT_TOKEN=1234567890:your_bot_token
+TELEGRAM_BOT_USERNAME=your_bot_username
+TELEGRAM_WEBHOOK_SECRET=change-me-to-a-random-secret
+```
+
+注意事项：
+
+- Vercel 环境不会运行 `getUpdates` 长轮询。
+- 文件日志在 Vercel 中会自动禁用，请使用 Vercel 平台日志查看运行记录。
+- 如果只启用内存缓存，冷启动或实例回收后缓存和 Telegram 会话状态会丢失。
+- 如需跨冷启动保存 `/auto` 和“上一条消息”，建议配置 Redis，并按需设置
+  `REDIS_TLS=true`。
+
 ### 使用 Docker 构建和运行
 
 也可以直接使用 Docker 命令构建和运行：
@@ -543,3 +601,5 @@ TransBridge 设计为易于扩展，如需添加新功能：
 3. 添加更多的 API 端点
 
 请参考 [CONTRIBUTING.md](../CONTRIBUTING.md) 了解如何贡献代码。
+
+[vercel-deploy]: https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Ffruitbars%2Ftransbridge&project-name=transbridge&repository-name=transbridge&env=SERVER_PORT,PROVIDER_1_TYPE,PROVIDER_1_API_URL,PROVIDER_1_API_KEY,PROVIDER_1_TIMEOUT,PROVIDER_1_IS_DEFAULT,PROVIDER_1_MODEL_1_NAME,PROVIDER_1_MODEL_1_WEIGHT,PROVIDER_1_MODEL_1_MAX_TOKENS,PROVIDER_1_MODEL_1_TEMPERATURE,PROVIDER_1_MODEL_2_NAME,PROVIDER_1_MODEL_2_WEIGHT,PROVIDER_1_MODEL_2_MAX_TOKENS,PROVIDER_1_MODEL_2_TEMPERATURE,CACHE_ENABLED,CACHE_TYPES,CACHE_MEMORY_TTL,CACHE_MEMORY_MAX_SIZE,REDIS_HOST,REDIS_CACHE_PORT,REDIS_PASSWORD,REDIS_TLS,REDIS_DB,REDIS_TTL,PROMPT_TEMPLATE,TRANSAPI_TOKENS,OPENAI_COMPATIBLE_ENABLED,OPENAI_COMPATIBLE_PATH,OPENAI_COMPATIBLE_AUTH_TOKENS,TELEGRAM_ENABLED,TELEGRAM_BOT_TOKEN,TELEGRAM_BOT_USERNAME,TELEGRAM_WEBHOOK_SECRET,TELEGRAM_ALLOWED_CHAT_IDS,TELEGRAM_ALLOWED_USER_IDS,TELEGRAM_DELETE_AFTER_SECONDS,TELEGRAM_POLL_TIMEOUT_SECONDS,TELEGRAM_API_BASE_URL,LOG_ENABLED,LOG_FILE_PATH,LOG_MAX_SIZE,LOG_MAX_AGE,LOG_MAX_BACKUPS,LOG_QUEUE_SIZE&envDescription=%E5%A1%AB%E5%86%99%20PROVIDER_1_API_KEY%20%E5%92%8C%20TRANSAPI_TOKENS%20%E5%8D%B3%E5%8F%AF%E9%83%A8%E7%BD%B2%E7%BF%BB%E8%AF%91%20API%EF%BC%9BTelegram%2FRedis%20%E4%B8%BA%E5%8F%AF%E9%80%89%E8%83%BD%E5%8A%9B%EF%BC%8C%E9%9D%9E%E6%95%8F%E6%84%9F%E9%A1%B9%E5%B7%B2%E9%A2%84%E5%A1%AB%E9%BB%98%E8%AE%A4%E5%80%BC%E3%80%82&envLink=https%3A%2F%2Fgithub.com%2Ffruitbars%2Ftransbridge%2Fblob%2Fmain%2FREADME.md%23vercel-%E9%83%A8%E7%BD%B2%E8%AF%B4%E6%98%8E&envDefaults=%7B%22SERVER_PORT%22%3A%228080%22%2C%22PROVIDER_1_TYPE%22%3A%22openai%22%2C%22PROVIDER_1_API_URL%22%3A%22https%3A%2F%2Fapi.openai.com%2Fv1%2Fchat%2Fcompletions%22%2C%22PROVIDER_1_TIMEOUT%22%3A%2230%22%2C%22PROVIDER_1_IS_DEFAULT%22%3A%22true%22%2C%22PROVIDER_1_MODEL_1_NAME%22%3A%22gpt-4o-mini%22%2C%22PROVIDER_1_MODEL_1_WEIGHT%22%3A%2210%22%2C%22PROVIDER_1_MODEL_1_MAX_TOKENS%22%3A%224000%22%2C%22PROVIDER_1_MODEL_1_TEMPERATURE%22%3A%220.2%22%2C%22PROVIDER_1_MODEL_2_NAME%22%3A%22gpt-4.1-mini%22%2C%22PROVIDER_1_MODEL_2_WEIGHT%22%3A%225%22%2C%22PROVIDER_1_MODEL_2_MAX_TOKENS%22%3A%224000%22%2C%22PROVIDER_1_MODEL_2_TEMPERATURE%22%3A%220.2%22%2C%22CACHE_ENABLED%22%3A%22true%22%2C%22CACHE_TYPES%22%3A%22%5B%5C%22memory%5C%22%5D%22%2C%22CACHE_MEMORY_TTL%22%3A%221h%22%2C%22CACHE_MEMORY_MAX_SIZE%22%3A%2210000%22%2C%22REDIS_HOST%22%3A%22127.0.0.1%22%2C%22REDIS_CACHE_PORT%22%3A%226379%22%2C%22REDIS_TLS%22%3A%22false%22%2C%22REDIS_DB%22%3A%220%22%2C%22REDIS_TTL%22%3A%2224h%22%2C%22PROMPT_TEMPLATE%22%3A%22Translate%20the%20following%20%7B%7Binput%7D%7D%20from%20%7B%7Bsource_lang%7D%7D%20to%20%7B%7Btarget_lang%7D%7D.%20Return%20only%20the%20final%20translation%20result.%22%2C%22OPENAI_COMPATIBLE_ENABLED%22%3A%22false%22%2C%22OPENAI_COMPATIBLE_PATH%22%3A%22%2Fv1%22%2C%22OPENAI_COMPATIBLE_AUTH_TOKENS%22%3A%22%5B%5D%22%2C%22TELEGRAM_ENABLED%22%3A%22false%22%2C%22TELEGRAM_ALLOWED_CHAT_IDS%22%3A%22%5B%5D%22%2C%22TELEGRAM_ALLOWED_USER_IDS%22%3A%22%5B%5D%22%2C%22TELEGRAM_DELETE_AFTER_SECONDS%22%3A%2260%22%2C%22TELEGRAM_POLL_TIMEOUT_SECONDS%22%3A%2230%22%2C%22TELEGRAM_API_BASE_URL%22%3A%22https%3A%2F%2Fapi.telegram.org%22%2C%22LOG_ENABLED%22%3A%22false%22%2C%22LOG_FILE_PATH%22%3A%22logs%2Ftranslation.log%22%2C%22LOG_MAX_SIZE%22%3A%2210%22%2C%22LOG_MAX_AGE%22%3A%2210%22%2C%22LOG_MAX_BACKUPS%22%3A%225%22%2C%22LOG_QUEUE_SIZE%22%3A%2210000%22%7D
