@@ -6,8 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
+	"strings"
 	"time"
 	"transbridge/internal/utils"
 
@@ -82,6 +82,16 @@ func (t *OpenAITranslator) Translate(promptTemplate, text, sourceLang, targetLan
 
 // TranslateWithContext 支持上下文的翻译方法
 func (t *OpenAITranslator) TranslateWithContext(ctx context.Context, promptTemplate, text, sourceLang, targetLang string) (string, error) {
+	if strings.TrimSpace(t.ApiURL) == "" {
+		return "", fmt.Errorf("provider api url is empty")
+	}
+	if strings.TrimSpace(t.ApiKey) == "" {
+		return "", fmt.Errorf("provider api key is empty")
+	}
+	if strings.TrimSpace(t.Model) == "" {
+		return "", fmt.Errorf("provider model is empty")
+	}
+
 	slang, _ := utils.GetLanguageName(sourceLang)
 	tlang, _ := utils.GetLanguageName(targetLang)
 
@@ -96,8 +106,6 @@ func (t *OpenAITranslator) TranslateWithContext(ctx context.Context, promptTempl
 			Content: prompt,
 		},
 	}
-
-	log.Println("prompt", prompt)
 
 	// 构造请求
 	reqBody := openai.ChatCompletionRequest{
@@ -114,35 +122,43 @@ func (t *OpenAITranslator) TranslateWithContext(ctx context.Context, promptTempl
 		return "", fmt.Errorf("failed to marshal request: %w", errVar)
 	}
 
-	// 创建请求
-	req, errVar := http.NewRequestWithContext(ctx, "POST", t.ApiURL, bytes.NewBuffer(reqData))
-	if errVar != nil {
-		return "", fmt.Errorf("failed to create request: %w", errVar)
-	}
-
-	// 设置请求头
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", t.ApiKey))
-
 	// 发送请求
 	var resp *http.Response
-	//var err error
+	var lastUpstreamError string
 	for attempt := 0; attempt <= t.RetryTimes; attempt++ {
+		req, errVar := http.NewRequestWithContext(ctx, "POST", t.ApiURL, bytes.NewReader(reqData))
+		if errVar != nil {
+			return "", fmt.Errorf("failed to create request: %w", errVar)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", t.ApiKey))
+
 		resp, err = t.Client.Do(req)
 		if err == nil && resp != nil && resp.StatusCode >= 200 && resp.StatusCode < 300 {
 			break
 		}
-		// 读取错误响应体以便下次重试前释放连接
+
 		if resp != nil {
-			io.Copy(io.Discard, resp.Body)
+			body, _ := io.ReadAll(resp.Body)
 			resp.Body.Close()
+			lastUpstreamError = fmt.Sprintf("upstream status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+			if resp.StatusCode != http.StatusTooManyRequests && resp.StatusCode < 500 {
+				return "", fmt.Errorf("%s", lastUpstreamError)
+			}
 		}
+
 		// 指数退避
 		backoff := time.Duration(200*(1<<attempt)) * time.Millisecond
 		time.Sleep(backoff)
 	}
 	if err != nil {
 		return "", fmt.Errorf("request failed: %w", err)
+	}
+	if resp == nil {
+		if lastUpstreamError != "" {
+			return "", fmt.Errorf("%s", lastUpstreamError)
+		}
+		return "", fmt.Errorf("request failed: empty upstream response")
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {

@@ -3,6 +3,7 @@ package translate_handler
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"strings"
 
@@ -70,6 +71,7 @@ func (h *Handler) HandleTranslation(w http.ResponseWriter, r *http.Request) {
 	// 使用翻译服务处理请求
 	translation, err := h.translationService.Translate(r.Context(), "", "", h.promptTemplate, req.Text, req.SourceLang, req.TargetLang)
 	if err != nil {
+		log.Printf("translation failed: %v", err)
 		h.sendError(w, "Translation failed", "translation_failed", http.StatusInternalServerError)
 		return
 	}
