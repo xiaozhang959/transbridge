@@ -48,10 +48,5 @@
     { "source": "/v1/models", "destination": "/api/index?__path=/v1/models" },
     { "source": "/telegram/webhook", "destination": "/api/index?__path=/telegram/webhook" },
     { "source": "/health", "destination": "/api/index?__path=/health" }
-  ],
-  "functions": {
-    "api/index.go": {
-      "maxDuration": 300
-    }
-  }
+  ]
 }
