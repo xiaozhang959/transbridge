@@ -169,10 +169,10 @@ Docker Compose 配置提供了以下功能：
 
 [![Deploy with Vercel](https://vercel.com/button)][vercel-deploy]
 
-项目已内置 Vercel Go Serverless Function 入口：
+项目已内置 Vercel Go HTTP Server 入口：
 
 ```text
-api/index.go
+cmd/api/main.go
 vercel.json
 ```
 

@@ -71,7 +71,7 @@ show_version() {
 build_current() {
   echo -e "${YELLOW}编译当前平台...${NC}"
   create_dist_dir
-  go build -ldflags "${LDFLAGS}" -o $DIST_DIR/transbridge ./cmd/transbridge
+  go build -ldflags "${LDFLAGS}" -o $DIST_DIR/transbridge ./cmd/api
   if [ $? -eq 0 ]; then
     echo -e "${GREEN}编译成功: ${DIST_DIR}/transbridge${NC}"
   else
@@ -86,10 +86,10 @@ build_linux() {
   create_dist_dir
   # AMD64
   echo -e "  编译 Linux amd64..."
-  CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o $DIST_DIR/transbridge-linux-amd64 ./cmd/transbridge
+  CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o $DIST_DIR/transbridge-linux-amd64 ./cmd/api
   # ARM64
   echo -e "  编译 Linux arm64..."
-  CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o $DIST_DIR/transbridge-linux-arm64 ./cmd/transbridge
+  CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o $DIST_DIR/transbridge-linux-arm64 ./cmd/api
   echo -e "${GREEN}Linux 版本编译完成${NC}"
 }
 
@@ -99,10 +99,10 @@ build_darwin() {
   create_dist_dir
   # AMD64
   echo -e "  编译 macOS amd64..."
-  CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o $DIST_DIR/transbridge-darwin-amd64 ./cmd/transbridge
+  CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o $DIST_DIR/transbridge-darwin-amd64 ./cmd/api
   # ARM64
   echo -e "  编译 macOS arm64..."
-  CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o $DIST_DIR/transbridge-darwin-arm64 ./cmd/transbridge
+  CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o $DIST_DIR/transbridge-darwin-arm64 ./cmd/api
   echo -e "${GREEN}macOS 版本编译完成${NC}"
 }
 
@@ -112,10 +112,10 @@ build_windows() {
   create_dist_dir
   # AMD64
   echo -e "  编译 Windows amd64..."
-  CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o $DIST_DIR/transbridge-windows-amd64.exe ./cmd/transbridge
+  CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o $DIST_DIR/transbridge-windows-amd64.exe ./cmd/api
   # ARM64
   echo -e "  编译 Windows arm64..."
-  CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o $DIST_DIR/transbridge-windows-arm64.exe ./cmd/transbridge
+  CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o $DIST_DIR/transbridge-windows-arm64.exe ./cmd/api
   echo -e "${GREEN}Windows 版本编译完成${NC}"
 }
 
