@@ -260,6 +260,8 @@ func marshalTranslationRequest(req openai.ChatCompletionRequest) ([]byte, error)
 
 	// 某些 OpenAI 兼容服务不按标准处理缺省值；这里显式声明非流式。
 	payload["stream"] = false
+	// DeepSeek-V4-Flash 支持关闭思考，翻译场景可减少延迟和无用 token。
+	payload["thinking"] = map[string]string{"type": "disabled"}
 
 	return json.Marshal(payload)
 }

@@ -533,7 +533,7 @@ const homePageHTML = `<!doctype html>
         <div class="field">
           <label for="token">API Token</label>
           <input id="token" placeholder="输入 TRANSAPI_TOKENS 中的任意一个 token" autocomplete="off" />
-          <div class="hint">Token 只在浏览器本地用于本次请求，不会保存。</div>
+          <div class="hint">Token 会保存在当前浏览器本地，下次打开页面可继续使用。</div>
         </div>
         <div class="row">
           <div>
@@ -581,10 +581,31 @@ const homePageHTML = `<!doctype html>
 
   <script>
     const $ = (id) => document.getElementById(id);
+    const tokenInput = $("token");
+    const tokenStorageKey = "transbridge.apiToken";
+
+    try {
+      const savedToken = localStorage.getItem(tokenStorageKey);
+      if (savedToken) {
+        tokenInput.value = savedToken;
+      }
+    } catch (_) {}
+
+    tokenInput.addEventListener("input", () => {
+      const token = tokenInput.value.trim();
+      try {
+        if (token) {
+          localStorage.setItem(tokenStorageKey, token);
+        } else {
+          localStorage.removeItem(tokenStorageKey);
+        }
+      } catch (_) {}
+    });
+
     $("translate").addEventListener("click", async () => {
       const btn = $("translate");
       const output = $("output");
-      const token = $("token").value.trim();
+      const token = tokenInput.value.trim();
       const text = $("input").value.trim();
 
       if (!token) {
@@ -595,6 +616,10 @@ const homePageHTML = `<!doctype html>
         output.textContent = "请输入需要翻译的文本。";
         return;
       }
+
+      try {
+        localStorage.setItem(tokenStorageKey, token);
+      } catch (_) {}
 
       btn.disabled = true;
       btn.textContent = "翻译中...";

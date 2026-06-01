@@ -20,6 +20,10 @@ type TranslationService struct {
 	logger       *logger.TranslationLogger // 新增日志记录器
 }
 
+type contextTranslator interface {
+	TranslateWithContext(ctx context.Context, promptTemplate, text, sourceLang, targetLang string) (string, error)
+}
+
 // TranslateRequest 翻译请求参数
 type TranslateRequest struct {
 	Text       string
@@ -93,7 +97,7 @@ func (s *TranslationService) Translate(ctx context.Context, provider, model, pro
 	}
 
 	// 3. 执行翻译
-	translation, err := usedTranslator.Translate(promptTemplate, text, sourceLang, targetLang)
+	translation, err := translateWithContext(ctx, usedTranslator, promptTemplate, text, sourceLang, targetLang)
 	if err != nil {
 		// 记录失败的翻译
 		return "", fmt.Errorf("translation failed with %s/%s: %w",
@@ -124,6 +128,16 @@ func (s *TranslationService) Translate(ctx context.Context, provider, model, pro
 	s.logTranslation(text, translation, sourceLang, targetLang, usedTranslator.GetAPIURL(), usedTranslator.GetProvider(), usedTranslator.GetModel(), cacheKey, false, time.Since(startTime).Milliseconds())
 
 	return translation, nil
+}
+
+func translateWithContext(ctx context.Context, usedTranslator translator.Translator, promptTemplate, text, sourceLang, targetLang string) (string, error) {
+	if ctxTranslator, ok := usedTranslator.(contextTranslator); ok {
+		return ctxTranslator.TranslateWithContext(ctx, promptTemplate, text, sourceLang, targetLang)
+	}
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	return usedTranslator.Translate(promptTemplate, text, sourceLang, targetLang)
 }
 
 // GetAvailableModels 获取所有可用的翻译模型

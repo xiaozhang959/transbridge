@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -21,6 +22,9 @@ const (
 	defaultDeleteAfterSeconds = 60
 	defaultPollTimeoutSeconds = 30
 	defaultReplyDeleteNotice  = "（此消息将于 %d 秒后自动删除）"
+	defaultTranslateTimeout   = 240 * time.Second
+	defaultWebhookTaskTimeout = 280 * time.Second
+	defaultReplyTimeout       = 8 * time.Second
 )
 
 type Bot struct {
@@ -162,12 +166,6 @@ func (b *Bot) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := b.ensureUsername(r.Context()); err != nil {
-		log.Printf("get telegram bot profile failed: %v", err)
-		w.WriteHeader(http.StatusBadGateway)
-		return
-	}
-
 	var update telegramUpdate
 	if err := json.NewDecoder(r.Body).Decode(&update); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -176,15 +174,28 @@ func (b *Bot) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if update.Message != nil {
-		if err := b.handleMessage(r.Context(), update.Message); err != nil {
-			log.Printf("Telegram webhook message handling failed: %v", err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
+		b.handleWebhookMessageAsync(r.Context(), update.Message)
 	}
 
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte("OK"))
+}
+
+func (b *Bot) handleWebhookMessageAsync(requestCtx context.Context, message *telegramMessage) {
+	taskCtx, cancel := context.WithTimeout(context.WithoutCancel(requestCtx), defaultWebhookTaskTimeout)
+
+	go func() {
+		defer cancel()
+
+		if err := b.ensureUsername(taskCtx); err != nil {
+			log.Printf("get telegram bot profile failed: %v", err)
+			return
+		}
+
+		if err := b.handleMessage(taskCtx, message); err != nil {
+			log.Printf("Telegram webhook message handling failed: %v", err)
+		}
+	}()
 }
 
 func (b *Bot) ensureUsername(ctx context.Context) error {
@@ -412,8 +423,11 @@ func (b *Bot) translateAndReply(ctx context.Context, message *telegramMessage, s
 	stopTyping := b.startTyping(ctx, message.Chat.ID)
 	defer stopTyping()
 
+	translateCtx, cancel := context.WithTimeout(ctx, defaultTranslateTimeout)
+	defer cancel()
+
 	translation, err := b.translationService.Translate(
-		ctx,
+		translateCtx,
 		"",
 		"",
 		b.promptTemplate,
@@ -422,7 +436,13 @@ func (b *Bot) translateAndReply(ctx context.Context, message *telegramMessage, s
 		detectTargetLanguage(sourceText),
 	)
 	if err != nil {
-		return b.replyText(ctx, message.Chat.ID, message.MessageID, fmt.Sprintf("翻译失败：%v", err), false)
+		text := fmt.Sprintf("翻译失败：%v", err)
+		if errors.Is(err, context.DeadlineExceeded) {
+			text = "翻译超时：上游模型响应过久，请稍后重试。"
+		}
+		replyCtx, replyCancel := context.WithTimeout(context.WithoutCancel(ctx), defaultReplyTimeout)
+		defer replyCancel()
+		return b.replyText(replyCtx, message.Chat.ID, message.MessageID, text, false)
 	}
 
 	text := translation
@@ -430,7 +450,10 @@ func (b *Bot) translateAndReply(ctx context.Context, message *telegramMessage, s
 		text = fmt.Sprintf("%s\n\n"+defaultReplyDeleteNotice, translation, b.cfg.DeleteAfterSeconds)
 	}
 
-	sentMessageID, err := b.client.sendMessage(ctx, sendMessageRequest{
+	replyCtx, replyCancel := context.WithTimeout(context.WithoutCancel(ctx), defaultReplyTimeout)
+	defer replyCancel()
+
+	sentMessageID, err := b.client.sendMessage(replyCtx, sendMessageRequest{
 		ChatID:              message.Chat.ID,
 		Text:                text,
 		ReplyToMessageID:    options.ReplyToMessageID,
