@@ -25,6 +25,7 @@ const (
 	defaultTranslateTimeout   = 240 * time.Second
 	defaultWebhookTaskTimeout = 280 * time.Second
 	defaultReplyTimeout       = 8 * time.Second
+	usernameLookupCooldown    = 10 * time.Minute
 )
 
 type Bot struct {
@@ -33,6 +34,7 @@ type Bot struct {
 	promptTemplate     string
 	client             *apiClient
 	username           string
+	usernameRetryAfter time.Time
 	state              cache.Cache
 
 	mu            sync.RWMutex
@@ -187,15 +189,41 @@ func (b *Bot) handleWebhookMessageAsync(requestCtx context.Context, message *tel
 	go func() {
 		defer cancel()
 
-		if err := b.ensureUsername(taskCtx); err != nil {
-			log.Printf("get telegram bot profile failed: %v", err)
-			return
-		}
+		b.ensureUsernameBestEffort(taskCtx)
 
 		if err := b.handleMessage(taskCtx, message); err != nil {
 			log.Printf("Telegram webhook message handling failed: %v", err)
 		}
 	}()
+}
+
+func (b *Bot) ensureUsernameBestEffort(ctx context.Context) {
+	now := time.Now()
+
+	b.mu.Lock()
+	if strings.TrimSpace(b.username) != "" {
+		b.mu.Unlock()
+		return
+	}
+	if now.Before(b.usernameRetryAfter) {
+		b.mu.Unlock()
+		return
+	}
+	b.usernameRetryAfter = now.Add(usernameLookupCooldown)
+	b.mu.Unlock()
+
+	me, err := b.client.getMe(ctx)
+	if err != nil {
+		log.Printf("get telegram bot profile failed; will retry after %s: %v", usernameLookupCooldown, err)
+		return
+	}
+
+	b.mu.Lock()
+	if strings.TrimSpace(b.username) == "" {
+		b.username = me.UserName
+	}
+	b.usernameRetryAfter = time.Time{}
+	b.mu.Unlock()
 }
 
 func (b *Bot) ensureUsername(ctx context.Context) error {
