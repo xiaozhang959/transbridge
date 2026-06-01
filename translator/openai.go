@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 	"transbridge/internal/utils"
@@ -116,7 +118,7 @@ func (t *OpenAITranslator) TranslateWithContext(ctx context.Context, promptTempl
 		MaxTokens:   t.MaxTokens,
 	}
 
-	reqData, errVar := json.Marshal(reqBody)
+	reqData, errVar := marshalTranslationRequest(reqBody)
 	//	log.Println("reqBody: ", reqBody)
 	if errVar != nil {
 		return "", fmt.Errorf("failed to marshal request: %w", errVar)
@@ -166,14 +168,34 @@ func (t *OpenAITranslator) TranslateWithContext(ctx context.Context, promptTempl
 		return "", fmt.Errorf("upstream status %d: %s", resp.StatusCode, string(body))
 	}
 
-	// 解析响应
+	// 解析响应。先读取 body，便于在上游返回非标准结构时输出安全诊断摘要。
+	responseBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response: %w", err)
+	}
+
 	var result openai.ChatCompletionResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := json.Unmarshal(responseBody, &result); err != nil {
+		log.Printf(
+			"openai compatible response decode failed: api_url=%s model=%s status=%d body=%s",
+			safeAPIURL(t.ApiURL),
+			t.Model,
+			resp.StatusCode,
+			summarizeUpstreamBody(responseBody, 800),
+		)
 		return "", fmt.Errorf("failed to decode response: %w", err)
 	}
 
 	// 检查响应是否包含翻译结果
 	if len(result.Choices) == 0 || result.Choices[0].Message.Content == "" {
+		log.Printf(
+			"openai compatible response missing translation: api_url=%s model=%s status=%d choices=%d body=%s",
+			safeAPIURL(t.ApiURL),
+			t.Model,
+			resp.StatusCode,
+			len(result.Choices),
+			summarizeUpstreamBody(responseBody, 800),
+		)
 		return "", fmt.Errorf("no translation result in response")
 	}
 
@@ -223,6 +245,56 @@ func (t *OpenAITranslator) ValidateConfig() error {
 // String 实现 Stringer 接口
 func (t *OpenAITranslator) String() string {
 	return fmt.Sprintf("%s/%s", t.Provider, t.Model)
+}
+
+func marshalTranslationRequest(req openai.ChatCompletionRequest) ([]byte, error) {
+	data, err := json.Marshal(req)
+	if err != nil {
+		return nil, err
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return nil, err
+	}
+
+	// 某些 OpenAI 兼容服务不按标准处理缺省值；这里显式声明非流式。
+	payload["stream"] = false
+
+	return json.Marshal(payload)
+}
+
+func safeAPIURL(apiURL string) string {
+	if idx := strings.Index(apiURL, "?"); idx >= 0 {
+		return apiURL[:idx]
+	}
+	return apiURL
+}
+
+func summarizeUpstreamBody(body []byte, limit int) string {
+	summary := strings.TrimSpace(string(body))
+	if summary == "" {
+		return "<empty>"
+	}
+
+	summary = redactSensitiveFields(summary)
+	summary = strings.Map(func(r rune) rune {
+		if r < 32 && r != '\n' && r != '\t' {
+			return ' '
+		}
+		return r
+	}, summary)
+
+	if limit > 0 && len(summary) > limit {
+		return summary[:limit] + "...(truncated)"
+	}
+	return summary
+}
+
+var sensitiveJSONFieldPattern = regexp.MustCompile(`(?i)("(?:api[_-]?key|access[_-]?token|token|authorization)"\s*:\s*")[^"]+(")`)
+
+func redactSensitiveFields(text string) string {
+	return sensitiveJSONFieldPattern.ReplaceAllString(text, `${1}<redacted>${2}`)
 }
 
 // OpenAIChatCompletion 提供 OpenAI 聊天完成功能

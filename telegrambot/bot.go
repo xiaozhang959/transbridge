@@ -409,6 +409,9 @@ func (b *Bot) handleTextPrefixTrigger(ctx context.Context, message *telegramMess
 }
 
 func (b *Bot) translateAndReply(ctx context.Context, message *telegramMessage, sourceText string, options replyOptions) error {
+	stopTyping := b.startTyping(ctx, message.Chat.ID)
+	defer stopTyping()
+
 	translation, err := b.translationService.Translate(
 		ctx,
 		"",
@@ -443,6 +446,37 @@ func (b *Bot) translateAndReply(ctx context.Context, message *telegramMessage, s
 	}
 
 	return nil
+}
+
+func (b *Bot) startTyping(ctx context.Context, chatID int64) func() {
+	typingCtx, cancel := context.WithCancel(ctx)
+
+	go b.sendTypingAction(typingCtx, chatID)
+
+	go func() {
+		ticker := time.NewTicker(4 * time.Second)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				b.sendTypingAction(typingCtx, chatID)
+			case <-typingCtx.Done():
+				return
+			}
+		}
+	}()
+
+	return cancel
+}
+
+func (b *Bot) sendTypingAction(ctx context.Context, chatID int64) {
+	actionCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	if err := b.client.sendChatAction(actionCtx, chatID, "typing"); err != nil && ctx.Err() == nil {
+		log.Printf("send telegram typing action failed: %v", err)
+	}
 }
 
 func (b *Bot) replyText(ctx context.Context, chatID, replyToMessageID int64, text string, autoDelete bool) error {
@@ -823,6 +857,15 @@ func (c *apiClient) sendMessage(ctx context.Context, request sendMessageRequest)
 	return response.Result.MessageID, nil
 }
 
+func (c *apiClient) sendChatAction(ctx context.Context, chatID int64, action string) error {
+	var response telegramAPIResponse[bool]
+	request := sendChatActionRequest{
+		ChatID: chatID,
+		Action: action,
+	}
+	return c.call(ctx, "sendChatAction", request, &response)
+}
+
 func (c *apiClient) deleteMessage(ctx context.Context, chatID, messageID int64) error {
 	var response telegramAPIResponse[bool]
 	payload := map[string]any{
@@ -922,4 +965,9 @@ type sendMessageRequest struct {
 	ReplyToMessageID    int64  `json:"reply_to_message_id,omitempty"`
 	AllowWithoutReply   bool   `json:"allow_sending_without_reply,omitempty"`
 	DisableNotification bool   `json:"disable_notification,omitempty"`
+}
+
+type sendChatActionRequest struct {
+	ChatID int64  `json:"chat_id"`
+	Action string `json:"action"`
 }
