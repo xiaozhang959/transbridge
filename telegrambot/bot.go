@@ -22,9 +22,9 @@ const (
 	defaultDeleteAfterSeconds = 60
 	defaultPollTimeoutSeconds = 30
 	defaultReplyDeleteNotice  = "（此消息将于 %d 秒后自动删除）"
-	defaultTranslateTimeout   = 240 * time.Second
-	defaultWebhookTaskTimeout = 280 * time.Second
-	defaultReplyTimeout       = 8 * time.Second
+	defaultTranslateTimeout   = 24 * time.Second
+	defaultReplyTimeout       = 4 * time.Second
+	usernameLookupTimeout     = 2 * time.Second
 	usernameLookupCooldown    = 10 * time.Minute
 )
 
@@ -176,25 +176,14 @@ func (b *Bot) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if update.Message != nil {
-		b.handleWebhookMessageAsync(r.Context(), update.Message)
+		b.ensureUsernameBestEffort(r.Context())
+		if err := b.handleMessage(r.Context(), update.Message); err != nil {
+			log.Printf("Telegram webhook message handling failed: %v", err)
+		}
 	}
 
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte("OK"))
-}
-
-func (b *Bot) handleWebhookMessageAsync(requestCtx context.Context, message *telegramMessage) {
-	taskCtx, cancel := context.WithTimeout(context.WithoutCancel(requestCtx), defaultWebhookTaskTimeout)
-
-	go func() {
-		defer cancel()
-
-		b.ensureUsernameBestEffort(taskCtx)
-
-		if err := b.handleMessage(taskCtx, message); err != nil {
-			log.Printf("Telegram webhook message handling failed: %v", err)
-		}
-	}()
 }
 
 func (b *Bot) ensureUsernameBestEffort(ctx context.Context) {
@@ -212,7 +201,10 @@ func (b *Bot) ensureUsernameBestEffort(ctx context.Context) {
 	b.usernameRetryAfter = now.Add(usernameLookupCooldown)
 	b.mu.Unlock()
 
-	me, err := b.client.getMe(ctx)
+	lookupCtx, cancel := context.WithTimeout(ctx, usernameLookupTimeout)
+	defer cancel()
+
+	me, err := b.client.getMe(lookupCtx)
 	if err != nil {
 		log.Printf("get telegram bot profile failed; will retry after %s: %v", usernameLookupCooldown, err)
 		return
